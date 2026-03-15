@@ -166,6 +166,40 @@ def test_run_endpoint_stops_on_next_human_turn(monkeypatch: pytest.MonkeyPatch) 
     assert len(payload["ai_trace"]) == 2
 
 
+def test_turn_endpoint_advances_one_complete_ai_turn(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = TestClient(create_app())
+    fake_client = _FakeClient([
+        _ClueDecision("ocean", 1),
+        _GuessDecision("pass"),
+    ])
+    monkeypatch.setattr(
+        "codenames_llm.controllers.openai_controller.create_openai_client",
+        lambda: fake_client,
+    )
+
+    created = client.post(
+        "/api/sessions",
+        json={
+            "starts": "red",
+            "controllers": {
+                "red_spymaster": {"kind": "openai", "model": "gpt-5.4"},
+                "red_operative": {"kind": "openai", "model": "gpt-5.4"},
+            },
+        },
+    ).json()
+
+    response = client.post(
+        f"/api/sessions/{created['session_id']}/turn",
+        json={"max_steps": 5},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["game"]["turn_number"] == 2
+    assert payload["game"]["active_player"] == "blue_spymaster"
+    assert len(payload["ai_trace"]) == 2
+
+
 def test_step_endpoint_rejects_human_turn() -> None:
     client = TestClient(create_app())
     created = client.post("/api/sessions", json={"starts": "red"}).json()

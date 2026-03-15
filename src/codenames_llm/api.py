@@ -148,6 +148,15 @@ def create_app() -> FastAPI:
             raise _to_http_error(error) from error
         return build_session_view(session_id, session)
 
+    @app.post("/api/sessions/{session_id}/turn")
+    def run_turn(session_id: str, request: RunRequest) -> dict[str, object]:
+        session = _get_session_or_404(store, session_id)
+        try:
+            session.run_until_turn_end(max_steps=request.max_steps)
+        except (CodenamesError, ControllerError) as error:
+            raise _to_http_error(error) from error
+        return build_session_view(session_id, session)
+
     return app
 
 

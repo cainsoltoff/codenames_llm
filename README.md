@@ -19,7 +19,8 @@ The long-term goal is to let humans and LLMs play any of the four Codenames role
   - `human`
   - `openai`
 - OpenAI-backed spymaster and operative turns through the backend
-- AI stepping, run-until-human controls, safe AI trace history, and prompt debugging
+- AI stepping, advance-turn controls, safe AI trace history, and prompt debugging
+- Spectator-first browser layout with matchup framing, active-turn highlights, clue/guess spotlights, and grouped transcript feed
 
 ## Current Limitations
 
@@ -30,6 +31,7 @@ The long-term goal is to let humans and LLMs play any of the four Codenames role
 - Advanced tabletop clue edge cases are not implemented
   - for example homophones, abbreviations, and semantic disputes
 - The frontend uses polling, not websockets
+- The spectator linger/recap behavior currently lives in the frontend only
 
 ## Tech Stack
 
@@ -149,10 +151,17 @@ The browser UI lets you:
 - choose the starting team
 - optionally set a seed
 - configure each role as `human` or `openai`
+- choose a prompt style for OpenAI spymasters
 - submit clues, guesses, and passes for human turns
 - step one AI action at a time
-- run AI turns until a human needs to act
+- advance a full AI-controlled turn at a time
 - inspect transcript and AI trace data
+- watch a spectator-focused summary with:
+  - team lineup cards
+  - current clue
+  - guesses remaining
+  - current turn guesses
+  - completed-turn linger behavior after `Advance Turn`
 
 ## OpenAI Setup
 
@@ -180,6 +189,17 @@ A good first mixed-role setup is:
 - `blue_operative = human`
 
 That lets you watch the AI generate a clue, then take over as the human operative.
+
+### Prompt presets
+
+OpenAI spymasters support prompt-style presets in the web UI:
+
+- `Base`
+  - the current balanced/default clueing strategy
+- `Aggressive Cluegiver`
+  - pushes harder to find legal 2, 3, or 4-word clues instead of settling for clue `1`
+
+This is useful when you want to compare cautious clueing against more ambitious multi-word clue generation.
 
 ### Quota and billing errors
 
@@ -229,6 +249,7 @@ Main backend routes:
 - `POST /api/sessions/{id}/pass`
 - `POST /api/sessions/{id}/step`
 - `POST /api/sessions/{id}/run`
+- `POST /api/sessions/{id}/turn`
 
 Session responses include:
 
@@ -237,6 +258,8 @@ Session responses include:
 - public and spymaster board views
 - ordered history
 - AI trace entries
+
+The `/turn` endpoint advances the current team's full turn, then returns the updated session state.
 
 ## Engine Rules Implemented
 
@@ -272,6 +295,8 @@ The code is intentionally layered so future LLM-vs-LLM features can reuse the sa
 - [frontend/src/App.tsx](/Users/cain/Desktop/Projects/codenames-LLM/frontend/src/App.tsx): browser UI
 
 Each OpenAI call is currently stateless from OpenAI's point of view. The app rebuilds the relevant prompt from the current session state and recent history on every AI turn.
+
+The current spectator recap/linger behavior is implemented in the browser on top of that backend state so viewers can inspect the just-finished clue and guesses before moving to the next team.
 
 ## Development Notes
 

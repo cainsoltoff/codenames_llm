@@ -10,6 +10,7 @@ frontend/dist/
 frontend/.npm-cache/
 frontend/*.tsbuildinfo
 .uv-cache/
+.DS_Store
 
 # Virtual environments
 .venv

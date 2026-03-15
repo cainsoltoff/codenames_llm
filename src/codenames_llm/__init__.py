@@ -1,3 +1,4 @@
+from codenames_llm.api import app, create_app
 from codenames_llm.game import (
     BOARD_CARD_COUNT,
     BOARD_SIZE,
@@ -22,16 +23,21 @@ from codenames_llm.game import (
     load_words,
     validate_clue,
 )
+from codenames_llm.session import CodenamesSession, ControllerKind
 
 __all__ = [
+    "app",
     "BOARD_CARD_COUNT",
     "BOARD_SIZE",
     "BoardCard",
     "CardRole",
     "Clue",
     "ClueEvent",
+    "CodenamesSession",
     "CodenamesGame",
     "CodenamesError",
+    "ControllerKind",
+    "create_app",
     "GameCard",
     "GamePhase",
     "GameStatus",

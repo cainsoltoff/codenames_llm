@@ -21,8 +21,12 @@ def build_session_view(session_id: str, session: CodenamesSession) -> dict[str, 
         "session_id": session_id,
         "seed": session.seed,
         "controllers": {
-            role.value: controller for role, controller in session.controller_assignments.items()
+            role.value: controller.to_dict()
+            for role, controller in session.controller_assignments.items()
         },
+        "active_controller": session.active_controller.to_dict(),
+        "awaiting_human_input": session.awaiting_human_input,
+        "can_step": session.can_step,
         "game": {
             "status": game.status.value,
             "phase": game.phase.value,
@@ -45,6 +49,7 @@ def build_session_view(session_id: str, session: CodenamesSession) -> dict[str, 
         "public_board": build_public_board_view(game),
         "spymaster_board": build_spymaster_board_view(game),
         "history": [build_history_event_view(event) for event in game.history],
+        "ai_trace": [trace.to_dict() for trace in session.ai_trace],
     }
 
 

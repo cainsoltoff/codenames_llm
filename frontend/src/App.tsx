@@ -2,13 +2,29 @@ import { useEffect, useState } from "react";
 import {
   createSession,
   getSession,
+  runAiTurns,
+  stepAiTurn,
   submitClue,
   submitGuess,
   submitPass,
 } from "./api";
-import type { CardView, HistoryEventView, SessionView } from "./types";
+import type {
+  AITraceEntry,
+  CardView,
+  ControllerConfig,
+  ControllerKind,
+  HistoryEventView,
+  ReasoningEffort,
+  SessionView,
+} from "./types";
 
 const POLL_INTERVAL_MS = 2500;
+const ROLE_KEYS = [
+  "red_spymaster",
+  "red_operative",
+  "blue_spymaster",
+  "blue_operative",
+] as const;
 
 const CARD_CLASS_BY_COLOR: Record<CardView["color"], string> = {
   neutral: "card--neutral",
@@ -18,15 +34,37 @@ const CARD_CLASS_BY_COLOR: Record<CardView["color"], string> = {
   black: "card--black",
 };
 
+const DEFAULT_HUMAN_CONFIG: ControllerConfig = {
+  kind: "human",
+  model: null,
+  reasoning_effort: null,
+};
+
+const DEFAULT_OPENAI_CONFIG: ControllerConfig = {
+  kind: "openai",
+  model: "gpt-5.4",
+  reasoning_effort: "low",
+};
+
+const DEFAULT_CONTROLLERS: Record<string, ControllerConfig> = {
+  red_spymaster: { ...DEFAULT_HUMAN_CONFIG },
+  red_operative: { ...DEFAULT_HUMAN_CONFIG },
+  blue_spymaster: { ...DEFAULT_HUMAN_CONFIG },
+  blue_operative: { ...DEFAULT_HUMAN_CONFIG },
+};
+
 export default function App() {
   const [session, setSession] = useState<SessionView | null>(null);
   const [starts, setStarts] = useState<"red" | "blue">("red");
   const [seed, setSeed] = useState("");
+  const [controllers, setControllers] =
+    useState<Record<string, ControllerConfig>>(DEFAULT_CONTROLLERS);
   const [clueWord, setClueWord] = useState("");
   const [clueNumber, setClueNumber] = useState("1");
   const [guessWord, setGuessWord] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isAdvancingAi, setIsAdvancingAi] = useState(false);
 
   useEffect(() => {
     if (!session) {
@@ -37,8 +75,13 @@ export default function App() {
       try {
         const latest = await getSession(session.session_id);
         setSession(latest);
+        setError(null);
       } catch (pollError) {
-        setError((pollError as Error).message);
+        const message = (pollError as Error).message;
+        setError(message);
+        if (message.includes("was not found")) {
+          setSession(null);
+        }
       }
     }, POLL_INTERVAL_MS);
 
@@ -50,7 +93,11 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
-      const nextSession = await createSession(starts, seed === "" ? null : Number(seed));
+      const nextSession = await createSession(
+        starts,
+        seed === "" ? null : Number(seed),
+        controllers,
+      );
       setSession(nextSession);
     } catch (requestError) {
       setError((requestError as Error).message);
@@ -103,14 +150,75 @@ export default function App() {
     }
   }
 
+  async function handleAiStep() {
+    if (!session) {
+      return;
+    }
+    setIsAdvancingAi(true);
+    setError(null);
+    try {
+      const nextSession = await stepAiTurn(session.session_id);
+      setSession(nextSession);
+    } catch (requestError) {
+      setError((requestError as Error).message);
+    } finally {
+      setIsAdvancingAi(false);
+    }
+  }
+
+  async function handleAiRun() {
+    if (!session) {
+      return;
+    }
+    setIsAdvancingAi(true);
+    setError(null);
+    try {
+      const nextSession = await runAiTurns(session.session_id);
+      setSession(nextSession);
+    } catch (requestError) {
+      setError((requestError as Error).message);
+    } finally {
+      setIsAdvancingAi(false);
+    }
+  }
+
+  function updateControllerKind(role: string, kind: ControllerKind) {
+    setControllers((current) => ({
+      ...current,
+      [role]: kind === "openai" ? { ...DEFAULT_OPENAI_CONFIG } : { ...DEFAULT_HUMAN_CONFIG },
+    }));
+  }
+
+  function updateControllerModel(role: string, model: string) {
+    setControllers((current) => ({
+      ...current,
+      [role]: {
+        ...current[role],
+        model,
+      },
+    }));
+  }
+
+  function updateControllerReasoning(role: string, reasoningEffort: ReasoningEffort) {
+    setControllers((current) => ({
+      ...current,
+      [role]: {
+        ...current[role],
+        reasoning_effort: reasoningEffort,
+      },
+    }));
+  }
+
+  const activeRoleKind = session?.active_controller.kind ?? "human";
+
   return (
     <main className="app-shell">
       <section className="hero-panel">
         <p className="eyebrow">Codenames LLM</p>
-        <h1>Human-play browser prototype with API-backed sessions.</h1>
+        <h1>Mixed human and OpenAI play, backed by one game session API.</h1>
         <p className="lede">
-          This first web pass is built against the same session engine the CLI uses, so
-          future human and LLM roles can share one backend.
+          The browser, CLI, and future model-vs-model experiments now share the same
+          stateful session core, controller contracts, and transcript data.
         </p>
         <form className="session-form" onSubmit={handleCreateSession}>
           <label>
@@ -129,6 +237,49 @@ export default function App() {
               placeholder="Optional"
             />
           </label>
+          <div className="controller-grid">
+            {ROLE_KEYS.map((role) => (
+              <fieldset className="controller-card" key={role}>
+                <legend>{formatRole(role)}</legend>
+                <label>
+                  Controller
+                  <select
+                    value={controllers[role].kind}
+                    onChange={(event) => updateControllerKind(role, event.target.value as ControllerKind)}
+                  >
+                    <option value="human">Human</option>
+                    <option value="openai">OpenAI</option>
+                  </select>
+                </label>
+                {controllers[role].kind === "openai" ? (
+                  <>
+                    <label>
+                      Model
+                      <input
+                        value={controllers[role].model ?? ""}
+                        onChange={(event) => updateControllerModel(role, event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Reasoning
+                      <select
+                        value={controllers[role].reasoning_effort ?? "low"}
+                        onChange={(event) =>
+                          updateControllerReasoning(role, event.target.value as ReasoningEffort)
+                        }
+                      >
+                        <option value="none">None</option>
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                        <option value="xhigh">XHigh</option>
+                      </select>
+                    </label>
+                  </>
+                ) : null}
+              </fieldset>
+            ))}
+          </div>
           <button type="submit" disabled={loading}>
             {loading ? "Creating..." : "Create session"}
           </button>
@@ -155,42 +306,70 @@ export default function App() {
           </article>
 
           <article className="panel">
-            <PanelTitle title="Action Console" subtitle="Human-role browser controls" />
-            {session.game.phase === "clue" ? (
-              <form className="action-form" onSubmit={handleClueSubmit}>
-                <label>
-                  Clue word
-                  <input
-                    value={clueWord}
-                    onChange={(event) => setClueWord(event.target.value)}
-                    placeholder="single word"
-                  />
-                </label>
-                <label>
-                  Clue number
-                  <input
-                    value={clueNumber}
-                    onChange={(event) => setClueNumber(event.target.value)}
-                    inputMode="numeric"
-                  />
-                </label>
-                <button type="submit">Submit clue</button>
-              </form>
-            ) : (
-              <div className="action-stack">
-                <form className="action-form" onSubmit={handleGuessSubmit}>
+            <PanelTitle
+              title="Action Console"
+              subtitle={
+                activeRoleKind === "human"
+                  ? "Manual controls for the active human role"
+                  : "Backend-controlled OpenAI turn execution"
+              }
+            />
+            {session.game.status === "game_over" ? (
+              <p className="history-empty">Game over. No more actions are available.</p>
+            ) : session.awaiting_human_input ? (
+              session.game.phase === "clue" ? (
+                <form className="action-form" onSubmit={handleClueSubmit}>
                   <label>
-                    Guess word
+                    Clue word
                     <input
-                      value={guessWord}
-                      onChange={(event) => setGuessWord(event.target.value)}
-                      placeholder="board word"
+                      value={clueWord}
+                      onChange={(event) => setClueWord(event.target.value)}
+                      placeholder="single word"
                     />
                   </label>
-                  <button type="submit">Submit guess</button>
+                  <label>
+                    Clue number
+                    <input
+                      value={clueNumber}
+                      onChange={(event) => setClueNumber(event.target.value)}
+                      inputMode="numeric"
+                    />
+                  </label>
+                  <button type="submit">Submit clue</button>
                 </form>
-                <button className="secondary-button" type="button" onClick={handlePass}>
-                  Pass turn
+              ) : (
+                <div className="action-stack">
+                  <form className="action-form" onSubmit={handleGuessSubmit}>
+                    <label>
+                      Guess word
+                      <input
+                        value={guessWord}
+                        onChange={(event) => setGuessWord(event.target.value)}
+                        placeholder="board word"
+                      />
+                    </label>
+                    <button type="submit">Submit guess</button>
+                  </form>
+                  <button className="secondary-button" type="button" onClick={handlePass}>
+                    Pass turn
+                  </button>
+                </div>
+              )
+            ) : (
+              <div className="action-stack">
+                <p className="history-empty">
+                  {formatRole(session.game.active_player)} is controlled by OpenAI.
+                </p>
+                <button type="button" onClick={handleAiStep} disabled={isAdvancingAi || !session.can_step}>
+                  {isAdvancingAi ? "Stepping..." : "Step AI Turn"}
+                </button>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={handleAiRun}
+                  disabled={isAdvancingAi || !session.can_step}
+                >
+                  {isAdvancingAi ? "Running..." : "Run Until Human"}
                 </button>
               </div>
             )}
@@ -199,6 +378,16 @@ export default function App() {
           <article className="panel panel--history">
             <PanelTitle title="Transcript" subtitle="Latest game events" />
             <HistoryList events={session.history} />
+          </article>
+
+          <article className="panel panel--history">
+            <PanelTitle title="AI Trace" subtitle="Safe decision metadata only" />
+            <AITraceList entries={session.ai_trace} />
+          </article>
+
+          <article className="panel panel--history">
+            <PanelTitle title="Prompt Debug" subtitle="Latest request sent to OpenAI" />
+            <PromptDebugPanel entries={session.ai_trace} />
           </article>
         </section>
       ) : (
@@ -239,6 +428,10 @@ function StatusPanel({ session }: { session: SessionView }) {
         <dd>{session.game.active_player}</dd>
       </div>
       <div>
+        <dt>Active controller</dt>
+        <dd>{session.active_controller.kind}</dd>
+      </div>
+      <div>
         <dt>Phase</dt>
         <dd>{session.game.phase}</dd>
       </div>
@@ -265,6 +458,10 @@ function StatusPanel({ session }: { session: SessionView }) {
       <div>
         <dt>Blue agents</dt>
         <dd>{session.game.remaining_agents.blue}</dd>
+      </div>
+      <div>
+        <dt>Waiting on</dt>
+        <dd>{session.awaiting_human_input ? "human" : "openai"}</dd>
       </div>
     </dl>
   );
@@ -312,6 +509,38 @@ function HistoryList({ events }: { events: HistoryEventView[] }) {
   );
 }
 
+function AITraceList({ entries }: { entries: AITraceEntry[] }) {
+  if (entries.length === 0) {
+    return <p className="history-empty">No AI actions yet.</p>;
+  }
+
+  return (
+    <ol className="history-list">
+      {entries.map((entry) => (
+        <li key={`trace-${entry.sequence}`}>
+          {`#${entry.sequence}: ${entry.role} ${entry.action_type} via ${entry.controller.kind} (${entry.status})`}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function PromptDebugPanel({ entries }: { entries: AITraceEntry[] }) {
+  const latestEntryWithPrompt = [...entries].reverse().find((entry) => entry.prompt);
+  if (!latestEntryWithPrompt?.prompt) {
+    return <p className="history-empty">No AI prompt captured yet.</p>;
+  }
+
+  return (
+    <div className="debug-panel">
+      <p className="debug-meta">
+        {`${latestEntryWithPrompt.role} ${latestEntryWithPrompt.action_type} via ${latestEntryWithPrompt.controller.kind}`}
+      </p>
+      <pre className="debug-prompt">{latestEntryWithPrompt.prompt}</pre>
+    </div>
+  );
+}
+
 function formatHistoryEvent(event: HistoryEventView): string {
   const prefix = `R${event.round_number} T${event.turn_number}`;
   if (event.type === "clue" && event.clue) {
@@ -322,4 +551,8 @@ function formatHistoryEvent(event: HistoryEventView): string {
     return `${prefix}: ${event.player} guessed ${event.guessed_word} (${event.revealed_role}, ${outcome})`;
   }
   return `${prefix}: ${event.player} passed`;
+}
+
+function formatRole(role: string): string {
+  return role.replaceAll("_", " ");
 }

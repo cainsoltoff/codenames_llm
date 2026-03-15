@@ -1,9 +1,19 @@
-export type ControllerKind = "human";
+export type ControllerKind = "human" | "openai";
+export type ReasoningEffort = "none" | "low" | "medium" | "high" | "xhigh";
+
+export type ControllerConfig = {
+  kind: ControllerKind;
+  model: string | null;
+  reasoning_effort: ReasoningEffort | null;
+};
 
 export type SessionView = {
   session_id: string;
   seed: number | null;
-  controllers: Record<string, ControllerKind>;
+  controllers: Record<string, ControllerConfig>;
+  active_controller: ControllerConfig;
+  awaiting_human_input: boolean;
+  can_step: boolean;
   game: {
     status: "ongoing" | "game_over";
     phase: "clue" | "guess";
@@ -22,6 +32,7 @@ export type SessionView = {
   public_board: BoardView;
   spymaster_board: BoardView;
   history: HistoryEventView[];
+  ai_trace: AITraceEntry[];
 };
 
 export type BoardView = {
@@ -49,4 +60,17 @@ export type HistoryEventView = {
   was_correct?: boolean;
   ended_turn?: boolean;
   ended_game?: boolean;
+};
+
+export type AITraceEntry = {
+  sequence: number;
+  role: string;
+  team: "red" | "blue";
+  controller: ControllerConfig;
+  action_type: string;
+  prompt: string | null;
+  decision: Record<string, unknown> | null;
+  status: "succeeded" | "failed";
+  message: string;
+  attempts: number;
 };

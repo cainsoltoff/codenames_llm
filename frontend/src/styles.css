@@ -91,7 +91,8 @@ button {
 }
 
 .session-form label,
-.action-form label {
+.action-form label,
+.controller-card label {
   display: grid;
   gap: 8px;
   min-width: 180px;
@@ -99,7 +100,9 @@ button {
 
 .session-form input,
 .session-form select,
-.action-form input {
+.action-form input,
+.controller-card input,
+.controller-card select {
   border: 1px solid rgba(29, 36, 24, 0.14);
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.78);
@@ -119,6 +122,30 @@ button {
 .secondary-button {
   background: rgba(29, 36, 24, 0.12);
   color: var(--text-main);
+}
+
+.controller-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  width: 100%;
+}
+
+.controller-card {
+  border: 1px solid rgba(29, 36, 24, 0.12);
+  border-radius: 18px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.48);
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.controller-card legend {
+  padding: 0 8px;
+  text-transform: capitalize;
+  color: var(--accent);
+  font-weight: 700;
 }
 
 .dashboard-grid {
@@ -253,6 +280,29 @@ button {
   color: var(--text-muted);
 }
 
+.debug-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.debug-meta {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.debug-prompt {
+  margin: 0;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(29, 36, 24, 0.1);
+  color: var(--text-main);
+  font: 0.88rem/1.5 "SFMono-Regular", "Menlo", monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .empty-panel {
   padding: 28px;
   text-align: center;
@@ -263,6 +313,7 @@ button {
     grid-template-columns: 1fr;
   }
 
+  .controller-grid,
   .board-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -273,6 +324,7 @@ button {
     padding-inline: 14px;
   }
 
+  .controller-grid,
   .board-row {
     grid-template-columns: 1fr;
   }

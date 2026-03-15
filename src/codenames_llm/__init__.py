@@ -23,17 +23,26 @@ from codenames_llm.game import (
     load_words,
     validate_clue,
 )
-from codenames_llm.session import CodenamesSession, ControllerKind
+from codenames_llm.session import (
+    AITraceEntry,
+    CodenamesSession,
+    ControllerConfig,
+    ControllerKind,
+    HumanInputRequiredError,
+    ReasoningEffort,
+)
 
 __all__ = [
     "app",
     "BOARD_CARD_COUNT",
     "BOARD_SIZE",
+    "AITraceEntry",
     "BoardCard",
     "CardRole",
     "Clue",
     "ClueEvent",
     "CodenamesSession",
+    "ControllerConfig",
     "CodenamesGame",
     "CodenamesError",
     "ControllerKind",
@@ -45,8 +54,10 @@ __all__ = [
     "GuessEvent",
     "IllegalClueError",
     "InvalidActionError",
+    "HumanInputRequiredError",
     "PassEvent",
     "PlayerRole",
+    "ReasoningEffort",
     "Team",
     "generate_game",
     "initialize_game",

@@ -7,7 +7,11 @@ from typing import Sequence
 
 from codenames_llm.cli import render_game
 from codenames_llm.game import CodenamesError, PlayerRole, Team, generate_game, load_words
-from codenames_llm.session import CodenamesSession, ControllerKind
+from codenames_llm.session import (
+    CodenamesSession,
+    ControllerKind,
+    normalize_controller_assignments,
+)
 from codenames_llm.terminal import run_human_session
 
 
@@ -83,9 +87,9 @@ def _run_new_game(args: argparse.Namespace) -> int:
 
 
 def _run_play(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
-    controller_assignments = {
+    controller_assignments = normalize_controller_assignments({
         player_role: getattr(args, player_role.value) for player_role in PlayerRole
-    }
+    })
 
     if args.load is not None:
         if args.starts is not None or args.seed is not None:

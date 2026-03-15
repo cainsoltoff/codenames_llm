@@ -8,14 +8,30 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 
 from codenames_llm.game import CodenamesError, InvalidActionError, PlayerRole, Team
-from codenames_llm.session import CodenamesSession, ControllerKind
+from codenames_llm.session import (
+    CodenamesSession,
+    ControllerConfigurationError,
+    ControllerError,
+    ControllerExecutionError,
+    ControllerKind,
+    HumanInputRequiredError,
+    ReasoningEffort,
+)
 from codenames_llm.views import build_session_view
+
+
+class ControllerConfigRequest(BaseModel):
+    kind: ControllerKind
+    model: str | None = None
+    reasoning_effort: ReasoningEffort | None = None
+
+    model_config = ConfigDict(use_enum_values=False)
 
 
 class CreateSessionRequest(BaseModel):
     starts: Team
     seed: int | None = None
-    controllers: dict[PlayerRole, str] | None = None
+    controllers: dict[PlayerRole, ControllerConfigRequest] | None = None
 
     model_config = ConfigDict(use_enum_values=False)
 
@@ -29,14 +45,19 @@ class GuessRequest(BaseModel):
     word: str = Field(min_length=1)
 
 
+class RunRequest(BaseModel):
+    max_steps: int = Field(default=20, ge=1, le=100)
+
+
 @dataclass(slots=True)
 class SessionStore:
     sessions: dict[str, CodenamesSession] = field(default_factory=dict)
 
     def create(self, request: CreateSessionRequest) -> tuple[str, CodenamesSession]:
-        assignments = dict(request.controllers or {})
-        for role in PlayerRole:
-            assignments.setdefault(role, ControllerKind.HUMAN)
+        assignments = {
+            role: config.model_dump(mode="python")
+            for role, config in (request.controllers or {}).items()
+        }
         session = CodenamesSession.new(
             starting_team=request.starts,
             seed=request.seed,
@@ -85,7 +106,7 @@ def create_app() -> FastAPI:
         session = _get_session_or_404(store, session_id)
         try:
             session.submit_clue(request.word, request.number)
-        except CodenamesError as error:
+        except (CodenamesError, ControllerError) as error:
             raise _to_http_error(error) from error
         return build_session_view(session_id, session)
 
@@ -94,7 +115,7 @@ def create_app() -> FastAPI:
         session = _get_session_or_404(store, session_id)
         try:
             session.submit_guess(request.word)
-        except CodenamesError as error:
+        except (CodenamesError, ControllerError) as error:
             raise _to_http_error(error) from error
         return build_session_view(session_id, session)
 
@@ -103,7 +124,25 @@ def create_app() -> FastAPI:
         session = _get_session_or_404(store, session_id)
         try:
             session.submit_pass()
-        except CodenamesError as error:
+        except (CodenamesError, ControllerError) as error:
+            raise _to_http_error(error) from error
+        return build_session_view(session_id, session)
+
+    @app.post("/api/sessions/{session_id}/step")
+    def step_session(session_id: str) -> dict[str, object]:
+        session = _get_session_or_404(store, session_id)
+        try:
+            session.step_active_role()
+        except (CodenamesError, ControllerError) as error:
+            raise _to_http_error(error) from error
+        return build_session_view(session_id, session)
+
+    @app.post("/api/sessions/{session_id}/run")
+    def run_session(session_id: str, request: RunRequest) -> dict[str, object]:
+        session = _get_session_or_404(store, session_id)
+        try:
+            session.run_until_human_or_game_over(max_steps=request.max_steps)
+        except (CodenamesError, ControllerError) as error:
             raise _to_http_error(error) from error
         return build_session_view(session_id, session)
 
@@ -120,8 +159,18 @@ def _get_session_or_404(store: SessionStore, session_id: str) -> CodenamesSessio
         ) from error
 
 
-def _to_http_error(error: CodenamesError) -> HTTPException:
-    error_code = "invalid_action" if isinstance(error, InvalidActionError) else "invalid_request"
+def _to_http_error(error: Exception) -> HTTPException:
+    if isinstance(error, HumanInputRequiredError):
+        error_code = "human_input_required"
+    elif isinstance(error, ControllerConfigurationError):
+        error_code = "controller_unavailable"
+    elif isinstance(error, ControllerExecutionError):
+        error_code = "controller_execution_failed"
+    elif isinstance(error, InvalidActionError):
+        error_code = "invalid_action"
+    else:
+        error_code = "invalid_request"
+
     return HTTPException(
         status_code=400,
         detail={"error": error_code, "message": str(error)},

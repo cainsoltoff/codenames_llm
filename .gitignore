@@ -5,6 +5,11 @@ build/
 dist/
 wheels/
 *.egg-info
+frontend/node_modules/
+frontend/dist/
+frontend/.npm-cache/
+frontend/*.tsbuildinfo
+.uv-cache/
 
 # Virtual environments
 .venv

@@ -29,6 +29,7 @@ from codenames_llm.session import (
     ControllerConfig,
     ControllerKind,
     HumanInputRequiredError,
+    PromptPreset,
     ReasoningEffort,
 )
 
@@ -57,6 +58,7 @@ __all__ = [
     "HumanInputRequiredError",
     "PassEvent",
     "PlayerRole",
+    "PromptPreset",
     "ReasoningEffort",
     "Team",
     "generate_game",

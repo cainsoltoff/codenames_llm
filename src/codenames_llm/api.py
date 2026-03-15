@@ -15,6 +15,7 @@ from codenames_llm.session import (
     ControllerExecutionError,
     ControllerKind,
     HumanInputRequiredError,
+    PromptPreset,
     ReasoningEffort,
 )
 from codenames_llm.views import build_session_view
@@ -24,6 +25,7 @@ class ControllerConfigRequest(BaseModel):
     kind: ControllerKind
     model: str | None = None
     reasoning_effort: ReasoningEffort | None = None
+    prompt_preset: PromptPreset | None = None
 
     model_config = ConfigDict(use_enum_values=False)
 

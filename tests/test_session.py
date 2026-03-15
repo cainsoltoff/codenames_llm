@@ -78,7 +78,11 @@ def test_session_save_and_load_round_trip(tmp_path) -> None:
         make_generated_game(),
         seed=42,
         controller_assignments={
-            PlayerRole.BLUE_SPYMASTER: {"kind": "openai", "model": "gpt-5.4"},
+            PlayerRole.BLUE_SPYMASTER: {
+                "kind": "openai",
+                "model": "gpt-5.4",
+                "prompt_preset": "aggressive_cluegiver",
+            },
         },
     )
     session.default_save_path = tmp_path / "saved-session.json"
@@ -94,6 +98,10 @@ def test_session_save_and_load_round_trip(tmp_path) -> None:
     assert loaded.game.history == session.game.history
     assert loaded.default_save_path == saved_path
     assert loaded.controller_assignments[PlayerRole.BLUE_SPYMASTER].kind.value == "openai"
+    assert (
+        loaded.controller_assignments[PlayerRole.BLUE_SPYMASTER].prompt_preset.value
+        == "aggressive_cluegiver"
+    )
 
 
 def test_step_active_role_advances_openai_turn(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -128,7 +136,11 @@ def test_openai_request_logging_emits_prompt(
     session = CodenamesSession.from_generated_game(
         make_generated_game(),
         controller_assignments={
-            PlayerRole.RED_SPYMASTER: {"kind": "openai", "model": "gpt-5.4"}
+            PlayerRole.RED_SPYMASTER: {
+                "kind": "openai",
+                "model": "gpt-5.4",
+                "prompt_preset": "aggressive_cluegiver",
+            }
         },
     )
 
@@ -137,6 +149,7 @@ def test_openai_request_logging_emits_prompt(
 
     assert "OpenAI request:" in caplog.text
     assert "Board (all roles visible)" in caplog.text
+    assert "Prompt preset: aggressive_cluegiver" in caplog.text
     assert "OpenAI parsed response:" in caplog.text
 
 

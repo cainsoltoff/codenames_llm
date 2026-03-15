@@ -17,6 +17,21 @@ def test_new_game_cli_prints_board_and_key(capsys: pytest.CaptureFixture[str]) -
     assert captured.err == ""
 
 
+def test_new_game_cli_color_codes_hidden_key(capsys: pytest.CaptureFixture[str]) -> None:
+    main(["new-game", "--starts", "red", "--seed", "11"])
+
+    captured = capsys.readouterr()
+
+    assert "\033[31m" in captured.out
+    assert "\033[34m" in captured.out
+    assert "\033[37m" in captured.out
+    assert "\033[40m" in captured.out
+    assert "[R]" not in captured.out
+    assert "[B]" not in captured.out
+    assert "[I]" not in captured.out
+    assert "[A]" not in captured.out
+
+
 def test_new_game_cli_is_seeded(capsys: pytest.CaptureFixture[str]) -> None:
     main(["new-game", "--starts", "blue", "--seed", "22"])
     first = capsys.readouterr().out

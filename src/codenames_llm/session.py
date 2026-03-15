@@ -335,6 +335,21 @@ class CodenamesSession:
                 raise ControllerExecutionError(msg)
         return steps
 
+    def run_until_turn_end(self, *, max_steps: int = 20) -> int:
+        if self.awaiting_human_input:
+            msg = f"Active role {self.game.active_player.value} is waiting for human input."
+            raise HumanInputRequiredError(msg)
+
+        starting_turn_number = self.game.turn_number
+        steps = 0
+        while self.can_step and self.game.turn_number == starting_turn_number and steps < max_steps:
+            trace = self.step_active_role()
+            steps += 1
+            if trace.status != "succeeded":
+                msg = trace.message
+                raise ControllerExecutionError(msg)
+        return steps
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "version": 2,

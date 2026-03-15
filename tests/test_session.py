@@ -176,6 +176,27 @@ def test_run_until_human_or_game_over_stops_after_ai_sequence(
     assert session.awaiting_human_input is True
 
 
+def test_run_until_turn_end_stops_when_turn_changes(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_client = _FakeClient([_ClueDecision("ocean", 1), _GuessDecision("pass")])
+    monkeypatch.setattr(
+        "codenames_llm.controllers.openai_controller.create_openai_client",
+        lambda: fake_client,
+    )
+    session = CodenamesSession.from_generated_game(
+        make_generated_game(),
+        controller_assignments={
+            PlayerRole.RED_SPYMASTER: {"kind": "openai", "model": "gpt-5.4"},
+            PlayerRole.RED_OPERATIVE: {"kind": "openai", "model": "gpt-5.4"},
+        },
+    )
+
+    steps = session.run_until_turn_end(max_steps=4)
+
+    assert steps == 2
+    assert session.game.turn_number == 2
+    assert session.game.active_player.value == "blue_spymaster"
+
+
 def test_run_until_human_rejects_human_turn() -> None:
     session = CodenamesSession.from_generated_game(make_generated_game())
 

@@ -82,3 +82,10 @@ export function runAiTurns(sessionId: string, maxSteps = 20): Promise<SessionVie
     body: JSON.stringify({ max_steps: maxSteps }),
   });
 }
+
+export function advanceAiTurn(sessionId: string, maxSteps = 20): Promise<SessionView> {
+  return requestJson<SessionView>(`/api/sessions/${sessionId}/turn`, {
+    method: "POST",
+    body: JSON.stringify({ max_steps: maxSteps }),
+  });
+}

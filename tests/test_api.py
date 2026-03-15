@@ -45,6 +45,7 @@ def test_create_session_returns_expected_view_shape() -> None:
     payload = response.json()
     assert payload["session_id"]
     assert payload["controllers"]["red_spymaster"]["kind"] == "human"
+    assert payload["controllers"]["red_spymaster"]["prompt_preset"] is None
     assert payload["active_controller"]["kind"] == "human"
     assert payload["game"]["active_team"] == "red"
     assert payload["public_board"]["rows"]
@@ -114,6 +115,7 @@ def test_step_endpoint_advances_ai_spymaster(monkeypatch: pytest.MonkeyPatch) ->
                     "kind": "openai",
                     "model": "gpt-5.4",
                     "reasoning_effort": "low",
+                    "prompt_preset": "aggressive_cluegiver",
                 }
             },
         },
@@ -126,7 +128,8 @@ def test_step_endpoint_advances_ai_spymaster(monkeypatch: pytest.MonkeyPatch) ->
     assert payload["game"]["phase"] == "guess"
     assert payload["game"]["current_clue"] == {"word": "ocean", "number": 1}
     assert payload["ai_trace"][-1]["status"] == "succeeded"
-    assert "You are the active spymaster" in payload["ai_trace"][-1]["prompt"]
+    assert payload["controllers"]["red_spymaster"]["prompt_preset"] == "aggressive_cluegiver"
+    assert "Prompt preset: aggressive_cluegiver" in payload["ai_trace"][-1]["prompt"]
 
 
 def test_run_endpoint_stops_on_next_human_turn(monkeypatch: pytest.MonkeyPatch) -> None:

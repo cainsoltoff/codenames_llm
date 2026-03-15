@@ -42,6 +42,11 @@ class ReasoningEffort(StrEnum):
     XHIGH = "xhigh"
 
 
+class PromptPreset(StrEnum):
+    BASE = "base"
+    AGGRESSIVE_CLUEGIVER = "aggressive_cluegiver"
+
+
 class ControllerError(CodenamesError):
     """Raised when a configured controller cannot act successfully."""
 
@@ -63,6 +68,7 @@ class ControllerConfig:
     kind: ControllerKind
     model: str | None = None
     reasoning_effort: ReasoningEffort | None = None
+    prompt_preset: PromptPreset | None = None
 
     @property
     def model_name(self) -> str:
@@ -76,6 +82,7 @@ class ControllerConfig:
             "kind": self.kind.value,
             "model": self.model,
             "reasoning_effort": self.reasoning_effort.value if self.reasoning_effort else None,
+            "prompt_preset": self.prompt_preset.value if self.prompt_preset else None,
         }
 
     @classmethod
@@ -91,6 +98,9 @@ class ControllerConfig:
                 ReasoningEffort(value["reasoning_effort"])
                 if value.get("reasoning_effort")
                 else None
+            ),
+            prompt_preset=(
+                PromptPreset(value["prompt_preset"]) if value.get("prompt_preset") else None
             ),
         )
 
@@ -366,7 +376,7 @@ class CodenamesSession:
     def _run_clue_controller(
         self, controller: ControllerConfig, attempt: int
     ) -> tuple[ClueDecision, str]:
-        prompt = build_spymaster_prompt(self, attempt=attempt)
+        prompt = build_spymaster_prompt(self, controller=controller, attempt=attempt)
         if controller.kind is not ControllerKind.OPENAI:
             msg = f"Unsupported controller kind {controller.kind.value!r} for clue phase."
             raise ControllerConfigurationError(msg)
@@ -380,7 +390,7 @@ class CodenamesSession:
     def _run_guess_controller(
         self, controller: ControllerConfig, attempt: int
     ) -> tuple[GuessDecision, str]:
-        prompt = build_operative_prompt(self, attempt=attempt)
+        prompt = build_operative_prompt(self, controller=controller, attempt=attempt)
         if controller.kind is not ControllerKind.OPENAI:
             msg = f"Unsupported controller kind {controller.kind.value!r} for guess phase."
             raise ControllerConfigurationError(msg)
@@ -426,7 +436,9 @@ def normalize_controller_assignments(
     return assignments
 
 
-def build_spymaster_prompt(session: CodenamesSession, *, attempt: int) -> str:
+def build_spymaster_prompt(
+    session: CodenamesSession, *, controller: ControllerConfig, attempt: int
+) -> str:
     game = session.game
     cards = "\n".join(
         f"- {card.word}: {card.role.value}, revealed={str(card.revealed).lower()}"
@@ -434,22 +446,36 @@ def build_spymaster_prompt(session: CodenamesSession, *, attempt: int) -> str:
     )
     history = format_history(game.history)
     retry_note = "" if attempt == 1 else "Your previous answer was invalid. Try a different legal clue.\n"
+    prompt_preset = controller.prompt_preset or PromptPreset.BASE
+    strategy_note = (
+        "Strategy style: base. Prefer strong, legal clues, but do not force multi-word coverage when it is weak or risky.\n"
+        if prompt_preset is PromptPreset.BASE
+        else (
+            "Strategy style: aggressive cluegiver. Actively search for legal clues that connect 2, 3, or more of your team's unrevealed words.\n"
+            "Do not default to clue number 1 unless the board genuinely does not support a stronger legal option.\n"
+            "Be ambitious but still avoid obviously dangerous clues that point strongly to the assassin, bystanders, or the other team.\n"
+        )
+    )
     return (
         "You are the active spymaster in a game of Codenames.\n"
         f"Active team: {game.active_team.value}\n"
         f"Round: {game.round_number}\n"
         f"Turn: {game.turn_number}\n"
         f"Remaining agents: red={game.red_agents_remaining}, blue={game.blue_agents_remaining}\n"
+        f"Prompt preset: {prompt_preset.value}\n"
         "Board (all roles visible):\n"
         f"{cards}\n"
         f"History:\n{history}\n"
+        f"{strategy_note}"
         "Return a clue with a single word and a positive integer number.\n"
         "The clue word must not exactly match a board word, contain a board word, or be contained in a board word.\n"
         f"{retry_note}"
     )
 
 
-def build_operative_prompt(session: CodenamesSession, *, attempt: int) -> str:
+def build_operative_prompt(
+    session: CodenamesSession, *, controller: ControllerConfig, attempt: int
+) -> str:
     game = session.game
     visible_cards = "\n".join(
         f"- {card.word}: {'revealed as ' + card.role.value if card.revealed else 'unrevealed'}"
@@ -458,11 +484,13 @@ def build_operative_prompt(session: CodenamesSession, *, attempt: int) -> str:
     history = format_history(game.history)
     current_clue = game.current_clue
     retry_note = "" if attempt == 1 else "Your previous answer was invalid. Choose a valid board word or pass.\n"
+    prompt_preset = controller.prompt_preset or PromptPreset.BASE
     return (
         "You are the active operative in a game of Codenames.\n"
         f"Active team: {game.active_team.value}\n"
         f"Round: {game.round_number}\n"
         f"Turn: {game.turn_number}\n"
+        f"Prompt preset: {prompt_preset.value}\n"
         f"Current clue: {current_clue.word} {current_clue.number}\n"
         f"Guesses remaining: {game.guesses_remaining}\n"
         "Use only public information. Do not infer from hidden roles.\n"

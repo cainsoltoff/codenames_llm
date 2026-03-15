@@ -1,10 +1,12 @@
 export type ControllerKind = "human" | "openai";
 export type ReasoningEffort = "none" | "low" | "medium" | "high" | "xhigh";
+export type PromptPreset = "base" | "aggressive_cluegiver";
 
 export type ControllerConfig = {
   kind: ControllerKind;
   model: string | null;
   reasoning_effort: ReasoningEffort | null;
+  prompt_preset: PromptPreset | null;
 };
 
 export type SessionView = {

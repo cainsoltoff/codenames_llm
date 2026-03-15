@@ -8,12 +8,22 @@ const sampleSession = {
   session_id: "session-1",
   seed: 7,
   controllers: {
-    red_spymaster: { kind: "openai", model: "gpt-5.4", reasoning_effort: "low" },
-    red_operative: { kind: "human", model: null, reasoning_effort: null },
-    blue_spymaster: { kind: "human", model: null, reasoning_effort: null },
-    blue_operative: { kind: "human", model: null, reasoning_effort: null },
+    red_spymaster: {
+      kind: "openai",
+      model: "gpt-5.4",
+      reasoning_effort: "low",
+      prompt_preset: "aggressive_cluegiver",
+    },
+    red_operative: { kind: "human", model: null, reasoning_effort: null, prompt_preset: null },
+    blue_spymaster: { kind: "human", model: null, reasoning_effort: null, prompt_preset: null },
+    blue_operative: { kind: "human", model: null, reasoning_effort: null, prompt_preset: null },
   },
-  active_controller: { kind: "openai", model: "gpt-5.4", reasoning_effort: "low" },
+  active_controller: {
+    kind: "openai",
+    model: "gpt-5.4",
+    reasoning_effort: "low",
+    prompt_preset: "aggressive_cluegiver",
+  },
   awaiting_human_input: false,
   can_step: true,
   game: {
@@ -64,7 +74,12 @@ describe("App", () => {
                 sequence: 1,
                 role: "red_spymaster",
                 team: "red",
-                controller: { kind: "openai", model: "gpt-5.4", reasoning_effort: "low" },
+                controller: {
+                  kind: "openai",
+                  model: "gpt-5.4",
+                  reasoning_effort: "low",
+                  prompt_preset: "aggressive_cluegiver",
+                },
                 action_type: "clue",
                 prompt: "You are the active spymaster in a game of Codenames.",
                 decision: { word: "ocean", number: 1 },
@@ -91,6 +106,7 @@ describe("App", () => {
     render(<App />);
 
     await userEvent.selectOptions(screen.getAllByLabelText("Controller")[0], "openai");
+    await userEvent.selectOptions(screen.getByLabelText("Prompt style"), "aggressive_cluegiver");
     await userEvent.click(screen.getByRole("button", { name: "Create session" }));
 
     await waitFor(() => {

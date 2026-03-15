@@ -14,6 +14,7 @@ import type {
   ControllerConfig,
   ControllerKind,
   HistoryEventView,
+  PromptPreset,
   ReasoningEffort,
   SessionView,
 } from "./types";
@@ -38,12 +39,14 @@ const DEFAULT_HUMAN_CONFIG: ControllerConfig = {
   kind: "human",
   model: null,
   reasoning_effort: null,
+  prompt_preset: null,
 };
 
 const DEFAULT_OPENAI_CONFIG: ControllerConfig = {
   kind: "openai",
   model: "gpt-5.4",
   reasoning_effort: "low",
+  prompt_preset: "base",
 };
 
 const DEFAULT_CONTROLLERS: Record<string, ControllerConfig> = {
@@ -209,6 +212,16 @@ export default function App() {
     }));
   }
 
+  function updateControllerPromptPreset(role: string, promptPreset: PromptPreset) {
+    setControllers((current) => ({
+      ...current,
+      [role]: {
+        ...current[role],
+        prompt_preset: promptPreset,
+      },
+    }));
+  }
+
   const activeRoleKind = session?.active_controller.kind ?? "human";
 
   return (
@@ -275,6 +288,20 @@ export default function App() {
                         <option value="xhigh">XHigh</option>
                       </select>
                     </label>
+                    {role.includes("spymaster") ? (
+                      <label>
+                        Prompt style
+                        <select
+                          value={controllers[role].prompt_preset ?? "base"}
+                          onChange={(event) =>
+                            updateControllerPromptPreset(role, event.target.value as PromptPreset)
+                          }
+                        >
+                          <option value="base">Base</option>
+                          <option value="aggressive_cluegiver">Aggressive Cluegiver</option>
+                        </select>
+                      </label>
+                    ) : null}
                   </>
                 ) : null}
               </fieldset>
@@ -421,19 +448,19 @@ function StatusPanel({ session }: { session: SessionView }) {
       </div>
       <div>
         <dt>Active team</dt>
-        <dd>{session.game.active_team}</dd>
+        <dd>{formatEnumLabel(session.game.active_team)}</dd>
       </div>
       <div>
         <dt>Active role</dt>
-        <dd>{session.game.active_player}</dd>
+        <dd>{formatEnumLabel(session.game.active_player)}</dd>
       </div>
       <div>
         <dt>Active controller</dt>
-        <dd>{session.active_controller.kind}</dd>
+        <dd>{formatEnumLabel(session.active_controller.kind)}</dd>
       </div>
       <div>
         <dt>Phase</dt>
-        <dd>{session.game.phase}</dd>
+        <dd>{formatEnumLabel(session.game.phase)}</dd>
       </div>
       <div>
         <dt>Current clue</dt>
@@ -449,7 +476,7 @@ function StatusPanel({ session }: { session: SessionView }) {
       </div>
       <div>
         <dt>Winner</dt>
-        <dd>{session.game.winner ?? "n/a"}</dd>
+        <dd>{session.game.winner ? formatEnumLabel(session.game.winner) : "n/a"}</dd>
       </div>
       <div>
         <dt>Red agents</dt>
@@ -461,7 +488,7 @@ function StatusPanel({ session }: { session: SessionView }) {
       </div>
       <div>
         <dt>Waiting on</dt>
-        <dd>{session.awaiting_human_input ? "human" : "openai"}</dd>
+        <dd>{formatEnumLabel(session.awaiting_human_input ? "human" : "openai")}</dd>
       </div>
     </dl>
   );
@@ -484,7 +511,7 @@ function BoardGrid({
               key={`${card.index}-${card.word}`}
             >
               <span className="card-word">{card.word}</span>
-              {showRoles && card.role ? <span className="card-role">{card.role}</span> : null}
+              {showRoles && card.role ? <span className="card-role">{formatCardRole(card.role)}</span> : null}
             </article>
           ))}
         </div>
@@ -518,7 +545,7 @@ function AITraceList({ entries }: { entries: AITraceEntry[] }) {
     <ol className="history-list">
       {entries.map((entry) => (
         <li key={`trace-${entry.sequence}`}>
-          {`#${entry.sequence}: ${entry.role} ${entry.action_type} via ${entry.controller.kind} (${entry.status})`}
+          {`#${entry.sequence}: ${formatEnumLabel(entry.role)} ${formatEnumLabel(entry.action_type)} via ${formatEnumLabel(entry.controller.kind)} (${formatEnumLabel(entry.status)})`}
         </li>
       ))}
     </ol>
@@ -534,7 +561,7 @@ function PromptDebugPanel({ entries }: { entries: AITraceEntry[] }) {
   return (
     <div className="debug-panel">
       <p className="debug-meta">
-        {`${latestEntryWithPrompt.role} ${latestEntryWithPrompt.action_type} via ${latestEntryWithPrompt.controller.kind}`}
+        {`${formatEnumLabel(latestEntryWithPrompt.role)} ${formatEnumLabel(latestEntryWithPrompt.action_type)} via ${formatEnumLabel(latestEntryWithPrompt.controller.kind)}`}
       </p>
       <pre className="debug-prompt">{latestEntryWithPrompt.prompt}</pre>
     </div>
@@ -544,15 +571,26 @@ function PromptDebugPanel({ entries }: { entries: AITraceEntry[] }) {
 function formatHistoryEvent(event: HistoryEventView): string {
   const prefix = `R${event.round_number} T${event.turn_number}`;
   if (event.type === "clue" && event.clue) {
-    return `${prefix}: ${event.player} gave clue ${event.clue.word} ${event.clue.number}`;
+    return `${prefix}: ${formatEnumLabel(event.player)} gave clue ${event.clue.word} ${event.clue.number}`;
   }
   if (event.type === "guess" && event.guessed_word && event.revealed_role) {
-    const outcome = event.was_correct ? "correct" : "miss";
-    return `${prefix}: ${event.player} guessed ${event.guessed_word} (${event.revealed_role}, ${outcome})`;
+    const outcome = event.was_correct ? "Correct" : "Miss";
+    return `${prefix}: ${formatEnumLabel(event.player)} guessed ${event.guessed_word} (${formatEnumLabel(event.revealed_role)}, ${outcome})`;
   }
-  return `${prefix}: ${event.player} passed`;
+  return `${prefix}: ${formatEnumLabel(event.player)} passed`;
 }
 
 function formatRole(role: string): string {
-  return role.replaceAll("_", " ");
+  return formatEnumLabel(role);
+}
+
+function formatCardRole(role: string): string {
+  return formatRole(role);
+}
+
+function formatEnumLabel(value: string): string {
+  return value
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 }

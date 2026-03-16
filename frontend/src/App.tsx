@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  advanceAiTurn,
   createSession,
   getSession,
   stepAiTurn,
@@ -20,6 +19,7 @@ import type {
 } from "./types";
 
 const POLL_INTERVAL_MS = 2500;
+const TURN_ADVANCE_STEP_DELAY_MS = 450;
 const ROLE_KEYS = [
   "red_spymaster",
   "red_operative",
@@ -182,9 +182,31 @@ export default function App() {
     setIsAdvancingAi(true);
     setError(null);
     try {
-      const nextSession = await advanceAiTurn(session.session_id);
-      setSession(nextSession);
-      setHeldTurn(getLatestCompletedTurn(nextSession));
+      let workingSession = session;
+      if (heldTurn) {
+        setHeldTurn(null);
+      }
+
+      const startingTurn = {
+        roundNumber: workingSession.game.round_number,
+        turnNumber: workingSession.game.turn_number,
+      };
+
+      while (workingSession.can_step && !workingSession.awaiting_human_input) {
+        const nextSession = await stepAiTurn(workingSession.session_id);
+        setSession(nextSession);
+        workingSession = nextSession;
+
+        const turnChanged =
+          workingSession.game.round_number !== startingTurn.roundNumber ||
+          workingSession.game.turn_number !== startingTurn.turnNumber;
+        if (turnChanged || workingSession.game.status === "game_over") {
+          setHeldTurn(startingTurn);
+          break;
+        }
+
+        await sleep(TURN_ADVANCE_STEP_DELAY_MS);
+      }
     } catch (requestError) {
       setError((requestError as Error).message);
     } finally {
@@ -856,17 +878,6 @@ function formatControllerLabel(controller: ControllerConfig): string {
   return controller.kind === "openai" ? "GPT" : "Human";
 }
 
-function getLatestCompletedTurn(session: SessionView): { roundNumber: number; turnNumber: number } | null {
-  const latestEvent = session.history[session.history.length - 1];
-  if (!latestEvent) {
-    return null;
-  }
-  return {
-    roundNumber: latestEvent.round_number,
-    turnNumber: latestEvent.turn_number,
-  };
-}
-
 function buildLiveTurnView(session: SessionView) {
   return {
     team: session.game.active_team,
@@ -914,4 +925,8 @@ function formatEnumLabel(value: string): string {
     .split("_")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
+}
+
+function sleep(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 }

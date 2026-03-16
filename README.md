@@ -125,6 +125,10 @@ Note: the CLI `play` command currently supports only human controllers.
 
 ## Web App Usage
 
+### Browser screenshot
+
+![Spectator view screenshot](docs/spectator.png)
+
 ### 1. Start the backend
 
 ```bash

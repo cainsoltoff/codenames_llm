@@ -90,6 +90,18 @@ const sampleSession = {
   ai_trace: [],
 };
 
+const cluePhaseSession = {
+  ...sampleSession,
+  game: {
+    ...sampleSession.game,
+    phase: "clue",
+    active_player: "red_spymaster",
+    current_clue: null,
+    guesses_remaining: null,
+  },
+  history: sampleSession.history.slice(0, 2),
+};
+
 describe("App", () => {
   beforeEach(() => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
@@ -181,5 +193,150 @@ describe("App", () => {
       expect(screen.getByText("Prompt Debug")).toBeInTheDocument();
     });
     expect(screen.getByText("You are the active spymaster in a game of Codenames.")).toBeInTheDocument();
+  });
+
+  it("advances a full AI turn while updating the spectator view between steps", async () => {
+    const stepResponses = [
+      {
+        ...cluePhaseSession,
+        game: {
+          ...cluePhaseSession.game,
+          phase: "guess",
+          active_player: "red_operative",
+          current_clue: { word: "ocean", number: 2 },
+          guesses_remaining: 3,
+        },
+        history: [
+          ...cluePhaseSession.history,
+          {
+            type: "clue",
+            team: "red",
+            player: "red_spymaster",
+            round_number: 2,
+            turn_number: 3,
+            clue: { word: "ocean", number: 2 },
+          },
+        ],
+      },
+      {
+        ...cluePhaseSession,
+        game: {
+          ...cluePhaseSession.game,
+          phase: "guess",
+          active_player: "red_operative",
+          current_clue: { word: "ocean", number: 2 },
+          guesses_remaining: 2,
+        },
+        history: [
+          ...cluePhaseSession.history,
+          {
+            type: "clue",
+            team: "red",
+            player: "red_spymaster",
+            round_number: 2,
+            turn_number: 3,
+            clue: { word: "ocean", number: 2 },
+          },
+          {
+            type: "guess",
+            team: "red",
+            player: "red_operative",
+            round_number: 2,
+            turn_number: 3,
+            guessed_word: "alpha",
+            revealed_role: "red_agent",
+            was_correct: true,
+            ended_turn: false,
+            ended_game: false,
+          },
+        ],
+      },
+      {
+        ...cluePhaseSession,
+        game: {
+          ...cluePhaseSession.game,
+          phase: "clue",
+          turn_number: 4,
+          active_team: "blue",
+          active_player: "blue_spymaster",
+          current_clue: null,
+          guesses_remaining: null,
+        },
+        history: [
+          ...cluePhaseSession.history,
+          {
+            type: "clue",
+            team: "red",
+            player: "red_spymaster",
+            round_number: 2,
+            turn_number: 3,
+            clue: { word: "ocean", number: 2 },
+          },
+          {
+            type: "guess",
+            team: "red",
+            player: "red_operative",
+            round_number: 2,
+            turn_number: 3,
+            guessed_word: "alpha",
+            revealed_role: "red_agent",
+            was_correct: true,
+            ended_turn: false,
+            ended_game: false,
+          },
+          {
+            type: "pass",
+            team: "red",
+            player: "red_operative",
+            round_number: 2,
+            turn_number: 3,
+          },
+        ],
+      },
+    ];
+
+    vi.restoreAllMocks();
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/api/sessions") && init?.method === "POST") {
+        return {
+          ok: true,
+          json: async () => cluePhaseSession,
+        } as Response;
+      }
+      if (url.endsWith("/step")) {
+        const nextResponse = stepResponses.shift() ?? stepResponses[stepResponses.length - 1];
+        return {
+          ok: true,
+          json: async () => nextResponse,
+        } as Response;
+      }
+      return {
+        ok: true,
+        json: async () => cluePhaseSession,
+      } as Response;
+    });
+
+    render(<App />);
+
+    await userEvent.selectOptions(screen.getAllByLabelText("Controller")[0], "openai");
+    await userEvent.selectOptions(screen.getAllByLabelText("Controller")[1], "openai");
+    await userEvent.click(screen.getByRole("button", { name: "Create session" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Waiting for clue")).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Advance Turn" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("ocean 2")).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(screen.getAllByText("alpha").length).toBeGreaterThan(0);
+    });
+    await waitFor(() => {
+      expect(screen.getByText("Just Finished")).toBeInTheDocument();
+    });
   });
 });

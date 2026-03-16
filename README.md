@@ -161,6 +161,7 @@ The browser UI lets you:
   - current clue
   - guesses remaining
   - current turn guesses
+  - live within-turn updates during `Advance Turn`
   - completed-turn linger behavior after `Advance Turn`
 
 ## OpenAI Setup
@@ -201,6 +202,16 @@ OpenAI spymasters support prompt-style presets in the web UI:
 
 This is useful when you want to compare cautious clueing against more ambitious multi-word clue generation.
 
+### Reasoning latency
+
+If you raise an OpenAI role from `low` to `medium` reasoning, it is normal for turns to take longer.
+
+- higher reasoning effort usually means more model thinking time before a response is returned
+- the `Prompt Debug` panel updates after the API call completes, so it will also appear later when the model is slower
+- `Advance Turn` now updates the spectator view incrementally inside a turn, so you should still see the clue appear first and guesses fill in after that
+
+So a slower clue on `medium` is usually expected model behavior, not a game-engine bug.
+
 ### Quota and billing errors
 
 If the UI shows an OpenAI error like `429 insufficient_quota`, the app is reaching OpenAI correctly but the API key or account does not currently have usable quota. Check billing and usage in the OpenAI dashboard.
@@ -212,6 +223,8 @@ There are two prompt-debugging paths:
 ### Browser debug panel
 
 After an AI action, the web app shows a `Prompt Debug` panel with the latest prompt sent to OpenAI.
+
+Note: the panel is populated when the backend call finishes, not the instant the request starts.
 
 ### Backend logging
 
